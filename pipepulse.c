@@ -32,7 +32,7 @@ const char command_help[] = \
     "-V|--version              version info\n"
     "-h|--help                 this help\n"
     "\n"
-    "By default, the file is updated if 60 seconds and 128k have passed.\n"
+    "By default, the file is updated if 10 seconds and 128k have passed.\n"
     "\n"
     "--per may be 0; in this case, the timestamp is updated periodically\n"
     "  as long as the pipe remains open.\n"
@@ -100,7 +100,7 @@ static struct {
     const char * path;
     bool use_stderr;
 } options = {
-    .every = 60,
+    .every = 10,
     .per = 1024 * 128,
     .path = NULL,
     .use_stderr = false
@@ -179,7 +179,7 @@ static void touch(ssize_t total, ssize_t this_period) {
 #define CONTINUE (-2)
 #define TRY_SOMETHING_ELSE (-3)
 
-static ssize_t splice_data() {
+static ssize_t splice_data(void) {
     ssize_t spliced = splice(STDIN_FILENO, NULL,
 			     STDOUT_FILENO, NULL,
 			     STRIDE,
@@ -198,7 +198,7 @@ static ssize_t splice_data() {
 	    return BREAK;
 	} else {
 	    // undocumented error.  Exit.
-	    error(1, errno, "Error sending data from stdin to stdout");
+	    error(EXIT_FAILURE, errno, "Error sending data from stdin to stdout");
 	    return BREAK;
 	}
     } else {
@@ -206,7 +206,7 @@ static ssize_t splice_data() {
     }
 }
 
-static ssize_t pipe_data() {
+static ssize_t pipe_data(void) {
     static uint8_t buffer[STRIDE];
     static uint8_t * rcursor = buffer, * wcursor = buffer;
 
@@ -223,7 +223,7 @@ static ssize_t pipe_data() {
 	    return CONTINUE;
 	} else {
 	    // not something we can handle or ignore
-	    error(1, errno, "Error reading from input pipe");
+	    error(EXIT_FAILURE, errno, "Error reading from input pipe");
 	}
     } else {
 	rcursor += rbytes;
@@ -242,7 +242,7 @@ static ssize_t pipe_data() {
 	    return CONTINUE;
 	} else {
 	    // not something we can handle or ignore
-	    error(1, errno, "Error writing to input pipe");
+	    error(EXIT_FAILURE, errno, "Error writing to input pipe");
 	}
     } else {
 	wcursor += wbytes;
@@ -335,7 +335,7 @@ int main(int argc, char * argv[argc]) {
 	timer_fd = timerfd_create(CLOCK_MONOTONIC, 0);
 
 	if (timer_fd < 0) {
-	    error(1, errno, "Unable to create timer");
+	    error(EXIT_FAILURE, errno, "Unable to create timer");
 	}
 
 	struct itimerspec timer = {
@@ -349,7 +349,7 @@ int main(int argc, char * argv[argc]) {
 	    }
 	};
 	if (timerfd_settime(timer_fd, 0, &timer, NULL) < 0) {
-	    error(1, errno, "Unable to set timer");
+	    error(EXIT_FAILURE, errno, "Unable to set timer");
 	}
     }
 
@@ -358,14 +358,11 @@ int main(int argc, char * argv[argc]) {
 	sigemptyset(&mask);
 	sigaddset(&mask, SIGPIPE);
 	if (-1 == sigprocmask(SIG_BLOCK, &mask, NULL)) {
-	    error(1, errno, "Unable to install signal handler");
+	    error(EXIT_FAILURE, errno, "Unable to install signal handler");
 	}
     }
 
-
-
     pipe_loop(timer_fd);
-
 
     return EXIT_SUCCESS;
 }
