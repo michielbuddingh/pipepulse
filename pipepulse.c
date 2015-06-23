@@ -149,7 +149,7 @@ static bool parse_options(int argc, char * argv[argc]) {
     }
 }
 
-static void touch(ssize_t total, ssize_t this_period) {
+static void write_stats(ssize_t total, ssize_t this_period) {
     char * log_data;
     int len = asprintf(&log_data, "%zd\t%zd\n", this_period, total);
 
@@ -206,7 +206,7 @@ static ssize_t splice_data(void) {
     }
 }
 
-static ssize_t pipe_data(void) {
+static ssize_t copy_data(void) {
     static uint8_t buffer[STRIDE];
     static uint8_t * rcursor = buffer, * wcursor = buffer;
 
@@ -256,7 +256,7 @@ static ssize_t pipe_data(void) {
     return wbytes;
 }
 
-static void pipe_loop(int timer_fd) {
+static void loop(int timer_fd) {
 
     struct pollfd fds[] = {
 	{ .fd = STDIN_FILENO, .events = POLLIN | POLLERR | POLLHUP },
@@ -275,6 +275,10 @@ static void pipe_loop(int timer_fd) {
 	if ((in->revents) && (out->revents)) {
 	    ssize_t spliced;
 	    if (use_splice) {
+		// If possible, use the splice syscall,
+		// as it basically tells the kernel to move
+		// data from in to out, and wake us up when
+		// it's finished.
 		spliced = splice_data();
 
 		if (TRY_SOMETHING_ELSE == spliced) {
@@ -283,7 +287,7 @@ static void pipe_loop(int timer_fd) {
 	    }
 
 	    if (!use_splice) {
-		spliced = pipe_data();
+		spliced = copy_data();
 	    }
 
 	    if (CONTINUE == spliced)
@@ -305,14 +309,14 @@ static void pipe_loop(int timer_fd) {
 	    }
 
 	    if (this_period >= options.per) {
-		touch(total, this_period);
+		write_stats(total, this_period);
 	    }
 	    this_period = 0;
 	}
     }
 
     if (this_period >= options.per) {
-	touch(total, this_period);
+	write_stats(total, this_period);
     }
 }
 
@@ -362,7 +366,7 @@ int main(int argc, char * argv[argc]) {
 	}
     }
 
-    pipe_loop(timer_fd);
+    loop(timer_fd);
 
     return EXIT_SUCCESS;
 }

@@ -11,14 +11,17 @@ DEPS = $(patsubst %,%.mk,$(FILES))
 	$(CC) $(CFLAGS) -c $<
 	$(CC) $(CFLAGS) -MM -MF $(@:.o=.mk) $<
 
+all:	pipepulse pipepulse.1
+
 pipepulse: $(OBJS)
 	$(CC) $(CFLAGS) $(OBJS) -o $@
 
 pipepulse.1: README.rst
-	rst2man $< > $@
+	rst2man --no-generator $< $@
 
 clean:
 	-rm pipepulse
+	-rm pipepulse.1
 	-$(foreach obj,$(OBJS),rm $(obj);)
 	-$(foreach dep,$(DEPS),rm $(dep);)
 	-rm *.h.gch
